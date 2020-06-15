@@ -5,6 +5,8 @@ var SuiteData = require("./suiteData.js");
 var Suite = require("./suite");
 var ResultsManager = require("./resultsManager");
 var config = require("./config.json");
+var chai = require('chai'), chaiHttp = require('chai-http');
+chai.use(chaiHttp);
 
 var restify = require("restify");
 
@@ -59,7 +61,7 @@ async function handleRunSuite(request, response, next) {
         var suiteData = await SuiteData.fromRequest(request);
         context.log("Successfully got all tests from the request for runId " + runId);
     }
-    catch {
+    catch (e){
         response.setHeader("content-type", "application/json");
         response.send(400, {results: [], errorMessage:"Could not get tests data from request", verdict:"error"});
         ResultsManager.deleteSuiteResult(runId);
@@ -69,12 +71,12 @@ async function handleRunSuite(request, response, next) {
     // Send a response with status code 202 and location header based on runId, and start the tests.
     response.setHeader("content-type", "application/json");
     response.setHeader("Location", "http://" + request.headers.host + "/getResults/" + runId);
-    response.send(202, "Tests are running.");
     let testSuite = new Suite(context, runId, suiteData);
     try {
         await testSuite.run();
         sendTelemetry(telemetryClient, "Finished suite run with runId " + runId);
         context.log("Finished suite run with runId " + runId);
+        handleGetTestResults(chai.request("http://" + request.headers.host).get('/getResults/').query({ runId: runId }), response);
         setTimeout(() => {
             ResultsManager.deleteSuiteResult(runId);
             context.log("Deleted suite results for runId " + runId);
@@ -88,7 +90,11 @@ async function handleRunSuite(request, response, next) {
 }
 
 async function handleGetTestResults(request, response, next) {
-    const runId = request.params.runId;
+    let runId;
+    if (request.hasOwnProperty("params"))
+        runId = request.params.runId;
+    else
+        runId = request.qs.runId;
     const activeRunIds = ResultsManager.getActiveRunIds();
     if (!activeRunIds.has(runId)) { // If runId doesn't exist (either deleted or never existed)
         response.setHeader("content-type", "application/json");
@@ -105,9 +111,11 @@ async function handleGetTestResults(request, response, next) {
     }
     else { // Results are ready
         response.setHeader("content-type", "application/json");
-        if (resultsObject["verdict"] === "success" || resultsObject["verdict"] === "failure") { // If tests finished without errors, send response with status code 200.
+        if (resultsObject["verdict"] === "success") { // If tests finished without errors, send response with status code 200.
             response.send(200, resultsObject);
         }
+        else if (resultsObject["verdict"] === "failure")
+            response.send(500, resultsObject);
         else if (resultsObject["verdict"] === "error") { // If there was an error while running the tests, send response with status code 500
             response.send(500, resultsObject);
             ResultsManager.deleteSuiteResult(runId); // In case of an error while running test suite, delete suite results once user knows about it.

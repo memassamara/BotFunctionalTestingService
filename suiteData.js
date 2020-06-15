@@ -1,3 +1,4 @@
+var fs = require('fs');
 var _ = require("underscore");
 
 var HTTP = require("./http");
@@ -8,10 +9,10 @@ class SuiteData {
     
     constructor(obj, query) {
         this.name = (query && query.name) || (obj && obj.name);
+        let tests = obj && obj.tests || [query];
         if (!this.name) {
             throw new Error("A suite 'name' parameter should be included on the query string or in the request body.");
         }
-        var tests = obj && obj.tests;
         if (!tests || !_.isArray(tests)) {
             throw new Error("A suite must contain a 'tests' array.");
         }
@@ -45,6 +46,9 @@ class SuiteData {
         var suiteURL = query.url;
         if (suiteURL) {
             var response = await HTTP.getJSON(suiteURL);
+            return new SuiteData(response, query);
+        }else if (query.file) {
+            var response = JSON.parse(fs.readFileSync('./transcripts/' + query.file + '.transcript', 'utf8'));
             return new SuiteData(response, query);
         }
         else {

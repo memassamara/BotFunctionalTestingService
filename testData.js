@@ -1,3 +1,4 @@
+var fs = require('fs');
 var _ = require("underscore");
 
 var HTTP = require("./http");
@@ -55,9 +56,11 @@ class TestData {
     }
 
     static async getTestData(query) {
-        var testURL = query.url;
-        if (testURL) {
-            var response = await HTTP.getJSON(testURL);
+        if (query.url) {
+            var response = await HTTP.getJSON(query.url);
+            return new TestData(response, query);
+        }else if (query.file) {
+            var response = JSON.parse(fs.readFileSync('./transcripts/' + query.file + '.transcript', 'utf8'));
             return new TestData(response, query);
         }
         else {
@@ -69,6 +72,9 @@ class TestData {
         var testData = null;
         if (obj.hasOwnProperty("url") && obj.url) {
             var response = await HTTP.getJSON(obj.url);
+            testData = new TestData(response, obj);
+        }else if (obj.hasOwnProperty("file") && obj.file) {
+            var response = JSON.parse(fs.readFileSync('./transcripts/' + obj.file + '.transcript', 'utf8'));
             testData = new TestData(response, obj);
         }
         else {

@@ -6,6 +6,17 @@ var diff = require("deep-object-diff").diff;
 var directline = require("./directlineclient");
 var utils = require("./utils.js");
 
+const regex = {
+    ageQuestions: new RegExp(/age|old/, 'i'),
+    genderQuestions: new RegExp(/gender|sex/, 'i'),
+    searchQuestions: new RegExp(/search/, 'i'),
+    noTrials: new RegExp(/no relevant trials/, 'i'),
+    matchingTrials: new RegExp(/(matching clinical trials)|(relevant trials)/, 'i'),
+    countryQuestions: new RegExp(/country/, 'i'),
+    stateQuestions: new RegExp(/state/, 'i'),
+    numericQuestions: new RegExp(/^(what is the patient's).*\?/, 'i'),
+    conditionQuestions: new RegExp(/^(what .* condition).*\?/, 'i')
+};
 
 class DynamicTest extends Test {
 
@@ -93,43 +104,34 @@ class DynamicTest extends Test {
             question.exec(lastMessageFromBot.text)
     }
 
-    regex = {
-        ageQuestions: new RegExp(/age|old/, 'i'),
-        genderQuestions: new RegExp(/gender|sex/, 'i'),
-        searchQuestions: new RegExp(/search/, 'i'),
-        matchingTrials: new RegExp(/(matching clinical trials)|(relevant trials)/, 'i'),
-        countryQuestions: new RegExp(/country/, 'i'),
-        stateQuestions: new RegExp(/state/, 'i'),
-        numericQuestions: new RegExp(/^(what is the patient's).*\?/, 'i'),
-        conditionQuestions: new RegExp(/^(what .* condition).*\?/, 'i')
-    };
-
     async testStep(context, conversationId, userMessage, expectedReplies, testData) {
         let pullAnotherMessage = false;
         let messagesToPull = 1;
         if (testData.lastMessageFromBot == undefined) {
             userMessage.text = "begin " + testData.trigger;
-        } else if (this.matchRegex(testData.lastMessageFromBot, this.regex.genderQuestions)) {
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.genderQuestions)) {
             userMessage.text = "Female"
-        } else if (this.matchRegex(testData.lastMessageFromBot, this.regex.ageQuestions)) {
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.ageQuestions)) {
             userMessage.text = "20"
-        } else if (this.matchRegex(testData.lastMessageFromBot, this.regex.countryQuestions)) {
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.countryQuestions)) {
             userMessage.text = "United states"
-        } else if (this.matchRegex(testData.lastMessageFromBot, this.regex.searchQuestions)) {
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.searchQuestions)) {
             userMessage.text = "Specific state"
-        } else if (this.matchRegex(testData.lastMessageFromBot, this.regex.stateQuestions)) {
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.stateQuestions)) {
             userMessage.text = "CA"
         } else if (testData && testData.lastMessageFromBot && this.isLastStep(testData.lastMessageFromBot)) {
             userMessage.text = "2"; // 2 equals 'Get Results'
         } else if (this.isChoicesQuestion(testData.lastMessageFromBot)) {
             userMessage.text = this.getFirstChoice(testData.lastMessageFromBot); // first choice
-        } else if (this.matchRegex(testData.lastMessageFromBot, this.regex.conditionQuestions)) {
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.conditionQuestions)) {
             userMessage.text = testData.condition;
         }
-        else if (this.matchRegex(testData.lastMessageFromBot, this.regex.numericQuestions)) {
+        else if (this.matchRegex(testData.lastMessageFromBot, regex.numericQuestions)) {
             userMessage.text = "20";
-        } else if (this.matchRegex(testData.lastMessageFromBot, this.regex.matchingTrials)) {
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.matchingTrials)) {
             pullAnotherMessage = true;
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.noTrials)) {
+            throw new Error("Service error - No matching trials on service")
         } else {
             context.log("error - unrecognized message: " + testData.lastMessageFromBot);
             userMessage.text = "start over";

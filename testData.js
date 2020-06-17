@@ -1,4 +1,3 @@
-var fs = require('fs');
 var _ = require("underscore");
 
 var HTTP = require("./http");
@@ -6,6 +5,7 @@ var HTTP = require("./http");
 var Transcript = require("./transcript");
 
 var config = require("./config.json");
+const Test = require("./test");
 
 class TestData {
 
@@ -14,6 +14,8 @@ class TestData {
         this.version = (query && query.version) || (obj && obj.version);
         this.timeout = (query && query.timeout) || (obj && obj.timeout) || config.defaults.timeoutMilliseconds;
         this.bot = (query && query.bot) || (obj && obj.bot) || process.env["DefaultBot"];
+        this.userId = query.userId || "test-user-";
+        
         if (!this.bot) {
             throw new Error("Configuration error: No bot name was given as a query parameter nor as a test property and no DefaultBot in application settings.");
         }
@@ -38,11 +40,12 @@ class TestData {
         return extractedSecret;
     }
 
-    static inheritedProperties() {
-        return ["version", "timeout", "bot", "userId"];
+
+    createTest(){
+        return new Test();
     }
 
-    static async fromRequest(request) {
+    async fromRequest(request) {
         var testData = null;
         switch (request.method) {
             case "GET":
@@ -55,12 +58,10 @@ class TestData {
         return testData;
     }
 
-    static async getTestData(query) {
-        if (query.url) {
-            var response = await HTTP.getJSON(query.url);
-            return new TestData(response, query);
-        }else if (query.file) {
-            var response = JSON.parse(fs.readFileSync('./transcripts/' + query.file + '.transcript', 'utf8'));
+    async getTestData(query) {
+        var testURL = query.url;
+        if (testURL) {
+            var response = await HTTP.getJSON(testURL);
             return new TestData(response, query);
         }
         else {
@@ -68,13 +69,14 @@ class TestData {
         }
     }
 
+    static inheritedProperties() {
+        return ["version", "timeout", "bot", "userId"];
+    }
+
     static async fromObject(obj, defaults) {
         var testData = null;
         if (obj.hasOwnProperty("url") && obj.url) {
             var response = await HTTP.getJSON(obj.url);
-            testData = new TestData(response, obj);
-        }else if (obj.hasOwnProperty("file") && obj.file) {
-            var response = JSON.parse(fs.readFileSync('./transcripts/' + obj.file + '.transcript', 'utf8'));
             testData = new TestData(response, obj);
         }
         else {

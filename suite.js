@@ -22,7 +22,7 @@ class Suite {
 
      async runTest(testData) {
         try {
-            const result = await Test.perform(this.context, testData);
+            const result = await testData.createTest().perform(this.context, testData);
             return result;
         }
         catch (err) {

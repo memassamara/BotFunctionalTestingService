@@ -2,7 +2,7 @@
 
 A service to enable functional testing of a [Microsoft Bot Framework](https://dev.botframework.com/) bot. A call to this service programmatically simulates a user’s back-and-forth conversation with a bot, to test whether the bot behaves as expected. 
 
-** TODO UPDATE TO CTM **
+** TODO CTM INFO **
 
 When calling the service, a _Test_ is given as input. A _Test_ is basically a “recording” of a user’s conversation with a bot. The _Test_ is run against a given bot to check whether the conversation occurs as expected.
 

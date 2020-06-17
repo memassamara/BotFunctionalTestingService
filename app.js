@@ -32,12 +32,10 @@ server.post("/test", handleRunTest);
 server.get("/suite", handleRunSuite);
 server.post("/suite", handleRunSuite);
 server.get("/getResults/:runId", handleGetTestResults);
-
 server.listen(process.env.PORT || 3000, function () {
     sendTelemetry(telemetryClient, "Server started listening");
     console.log("%s listening at %s", server.name, server.url);
 });
-
 async function handleRunTest(request, response, next) {
     const context = new Context(request, response);
     context.log(`${server.name} processing a test ${request.method} request.`);
@@ -63,7 +61,7 @@ async function handleRunSuite(request, response, next) {
     }
     catch (e){
         response.setHeader("content-type", "application/json");
-        response.send(400, {results: [], errorMessage:"Could not get tests data from request", verdict:"error"});
+        response.send(400, { results: [], errorMessage: "Could not get tests data from request", verdict: "error" });
         ResultsManager.deleteSuiteResult(runId);
         context.log("Could not get tests data from request for runId " + runId);
         return;
@@ -80,7 +78,7 @@ async function handleRunSuite(request, response, next) {
         setTimeout(() => {
             ResultsManager.deleteSuiteResult(runId);
             context.log("Deleted suite results for runId " + runId);
-            }, config.defaults.testSuiteResultsRetentionSeconds*1000); // Delete suite results data after a constant time after tests end.
+        }, config.defaults.testSuiteResultsRetentionSeconds * 1000); // Delete suite results data after a constant time after tests end.
     }
     catch (err) {
         ResultsManager.updateSuiteResults(runId, [], "Error while running test suite", "error");
@@ -98,7 +96,7 @@ async function handleGetTestResults(request, response, next) {
     const activeRunIds = ResultsManager.getActiveRunIds();
     if (!activeRunIds.has(runId)) { // If runId doesn't exist (either deleted or never existed)
         response.setHeader("content-type", "application/json");
-        response.send(404, {results: [], errorMessage:"RunId does not exist.", verdict:"error"});
+        response.send(404, { results: [], errorMessage: "RunId does not exist.", verdict: "error" });
         return;
     }
     // Else, runId exists.
@@ -125,7 +123,7 @@ async function handleGetTestResults(request, response, next) {
 
 function sendTelemetry(telemetryClient, message) {
     if (telemetryClient) {
-        telemetryClient.trackTrace({message: message});
+        telemetryClient.trackTrace({ message: message });
         telemetryClient.flush();
     }
 }

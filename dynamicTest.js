@@ -10,7 +10,7 @@ const regex = {
     ageQuestions: new RegExp(/age|old/, 'i'),
     genderQuestions: new RegExp(/gender|sex/, 'i'),
     searchQuestions: new RegExp(/search/, 'i'),
-    noTrials: new RegExp(/no relevant trials/, 'i'),
+    noTrials: new RegExp(/(0|no) relevant trials/, 'i'),
     matchingTrials: new RegExp(/(matching clinical trials)|(relevant trials)/, 'i'),
     countryQuestions: new RegExp(/country/, 'i'),
     stateQuestions: new RegExp(/state/, 'i'),
@@ -125,18 +125,17 @@ class DynamicTest extends Test {
             userMessage.text = this.getFirstChoice(testData.lastMessageFromBot); // first choice
         } else if (this.matchRegex(testData.lastMessageFromBot, regex.conditionQuestions)) {
             userMessage.text = testData.condition;
-        }
-        else if (this.matchRegex(testData.lastMessageFromBot, regex.numericQuestions)) {
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.noTrials)) {
+            throw new Error("Service error - No matching trials on service")
+        } else if (this.matchRegex(testData.lastMessageFromBot, regex.numericQuestions)) {
             userMessage.text = "20";
         } else if (this.matchRegex(testData.lastMessageFromBot, regex.matchingTrials)) {
             pullAnotherMessage = true;
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.noTrials)) {
-            throw new Error("Service error - No matching trials on service")
         } else {
             context.log("error - unrecognized message: " + testData.lastMessageFromBot);
             userMessage.text = "start over";
             messagesToPull = 0;
-        }
+        }   
 
         context.log("testStep started");
         context.log("conversationId: " + conversationId);

@@ -10,7 +10,7 @@ const regex = {
     ageQuestions: new RegExp(/age|old/, 'i'),
     genderQuestions: new RegExp(/gender|sex/, 'i'),
     searchQuestions: new RegExp(/search/, 'i'),
-    noTrials: new RegExp(/(0|no) relevant trials/, 'i'),
+    noTrials: new RegExp(/(found 0|no) relevant trials/, 'i'),
     matchingTrials: new RegExp(/(matching clinical trials)|(relevant trials)/, 'i'),
     countryQuestions: new RegExp(/country/, 'i'),
     stateQuestions: new RegExp(/state/, 'i'),

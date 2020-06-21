@@ -2,9 +2,10 @@ var Test = require("./test");
 var _ = require("underscore");
 var expect = require("chai").expect;
 var diff = require("deep-object-diff").diff;
-
 var directline = require("./directlineclient");
 var utils = require("./utils.js");
+const { select } = require("underscore");
+const { validateKeyChars } = require("applicationinsights/out/Library/Tracestate");
 
 const regex = {
     ageQuestions: new RegExp(/age|old/, 'i'),
@@ -18,14 +19,27 @@ const regex = {
     conditionQuestions: new RegExp(/^(what .* condition).*\?/, 'i')
 };
 
+
+const ResponseType = {
+    Message: "Message",
+    Pull: "Pull",
+    Error: "Error"
+}
+
+const TestType = {
+    GreaterThan: "GreaterThan",
+    LowerThen: "LowerThen",
+    Equals: "Equals",
+    Match: "Match"
+}
+
 class DynamicTest extends Test {
 
     constructor() { super(); }
 
     checkIfConversationEnded(testData) {
         return testData.lastMessageFromBot && testData.lastMessageFromBot.hasOwnProperty("text") &&
-            (testData.lastMessageFromBot.text.trim().includes('Thank you for using this service for COVID-19 Clinical Trials Matching.') ||
-                testData.lastMessageFromBot.text.trim() === 'Here are the clinical trials the patient may qualify for:')
+            testData.lastMessageFromBot.text.match(testData.conversationEndRegex)
     }
 
     testConversation(context, testUserId, conversationSteps, conversationId, testData) {
@@ -71,14 +85,6 @@ class DynamicTest extends Test {
         return { "type": "message", "text": "<text>", "from": { "id": testUserId, "name": "Test User" } }
     }
 
-
-    isLastStep(message) {
-        return message && message.hasOwnProperty("text") &&
-            message.text.trim() === 'What would you like to do?' &&
-            message.hasOwnProperty("attachments") &&
-            message.attachments[0].content.buttons[0].title === 'Answer additional questions';
-    }
-
     isChoicesQuestion(lastMessageFromBot) {
         return lastMessageFromBot
             && lastMessageFromBot.attachments
@@ -104,38 +110,47 @@ class DynamicTest extends Test {
             question.exec(lastMessageFromBot.text)
     }
 
+
     async testStep(context, conversationId, userMessage, expectedReplies, testData) {
         let pullAnotherMessage = false;
         let messagesToPull = 1;
         if (testData.lastMessageFromBot == undefined) {
-            userMessage.text = "begin " + testData.trigger;
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.genderQuestions)) {
-            userMessage.text = "Female"
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.ageQuestions)) {
-            userMessage.text = "20"
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.countryQuestions)) {
-            userMessage.text = "United states"
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.searchQuestions)) {
-            userMessage.text = "Specific state"
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.stateQuestions)) {
-            userMessage.text = "CA"
-        } else if (testData && testData.lastMessageFromBot && this.isLastStep(testData.lastMessageFromBot)) {
-            userMessage.text = "2"; // 2 equals 'Get Results'
-        } else if (this.isChoicesQuestion(testData.lastMessageFromBot)) {
-            userMessage.text = this.getFirstChoice(testData.lastMessageFromBot); // first choice
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.conditionQuestions)) {
-            userMessage.text = testData.condition;
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.noTrials)) {
-            throw new Error("Service error - No matching trials on service")
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.numericQuestions)) {
-            userMessage.text = "20";
-        } else if (this.matchRegex(testData.lastMessageFromBot, regex.matchingTrials)) {
-            pullAnotherMessage = true;
+            userMessage.text = "begin " + testData.scenario;
         } else {
-            context.log("error - unrecognized message: " + testData.lastMessageFromBot);
-            userMessage.text = "start over";
-            messagesToPull = 0;
-        }   
+            let foundMatch = false;
+            testData.dynamicQA.forEach(dqa => {
+                if (testData.lastMessageFromBot.text.match(dqa.regex)) {
+                    let response = dqa.response;
+                    switch (response.type) {
+                        case ResponseType.Message:
+                            userMessage.text = response.value;
+                            foundMatch = true;
+                            return;
+                        case ResponseType.Pull:
+                            messagesToPull = parseInt(response.value);
+                            pullAnotherMessage = true;
+                            foundMatch = true;
+                            return;
+                        case ResponseType.Error:
+                            throw response.value;
+                        default:
+                            throw 'wrong response type: ' + response.type;
+                    }
+                }
+            })
+
+            if (!foundMatch) {
+                if (this.isChoicesQuestion(testData.lastMessageFromBot)) {
+                    userMessage.text = this.getFirstChoice(testData.lastMessageFromBot); // first choice
+                } else if (this.checkIfConversationEnded(testData)) {
+                    //do nothing
+                } else {
+                    context.log("error - unrecognized message: " + testData.lastMessageFromBot);
+                    throw "error - unrecognized message: " + testData.lastMessageFromBot;
+
+                }
+            }
+        }
 
         context.log("testStep started");
         context.log("conversationId: " + conversationId);
@@ -144,10 +159,10 @@ class DynamicTest extends Test {
         context.log("timeoutMilliseconds: " + testData.timeout);
 
         if (pullAnotherMessage) {
-                let bUserMessageIncluded = false;
-                var botReplies = await directline.pollMessages(conversationId, messagesToPull, bUserMessageIncluded, testData.timeout);
-                testData.lastMessageFromBot = botReplies.reverse().find(message => message.text != undefined);
-                return true
+            let bUserMessageIncluded = false;
+            var botReplies = await directline.pollMessages(conversationId, messagesToPull, bUserMessageIncluded, testData.timeout);
+            testData.lastMessageFromBot = botReplies.reverse().find(message => message.text != undefined);
+            return true
         } else {
             return directline.sendMessage(conversationId, userMessage)
                 .then((response) => {
@@ -171,6 +186,7 @@ class DynamicTest extends Test {
     }
 
 
+
     assertThatCardsFieldsAreNotEmpty(card) {
         let fields = Object.keys(card);
         for (let i = 0; i < fields.length; i++) {
@@ -183,7 +199,6 @@ class DynamicTest extends Test {
         }
     }
 
-
     compareMessages(context, userMessage, expectedReplies, actualMessages, testData) {
         context.log("compareMessages started");
         context.log("actualMessages: " + utils.stringify(actualMessages));
@@ -195,45 +210,76 @@ class DynamicTest extends Test {
         testData.lastMessageFromBot = botReplies.reverse().find(message => message.text != undefined);
         for (let i = 0; i < botReplies.length; i++) {
             var botReply = botReplies[i];
-            var trialsCountRegex = /Found \d+ relevant trials/g;
+
             if (botReply.hasOwnProperty("text")) {
-                if (botReply.text === "Sorry, no relevant trials were found") {
-                    var exception = new Error("Initial trials count is ZERO");
-                    exception.details = { message: "Initial trials count is ZERO", expected: "Initial trials count > ZERO", actual: "Initial trials count = ZERO" };
-                    throw exception;
-                }
-                else {
-                    if (trialsCountRegex.exec(botReply.text)) { // if the message contains trials count don't assert literally
-                        testData.trialsCount = parseInt(botReply.text.split(" ")[1]); // split on space => the second record will be trials' count
-                        expect(testData.trialsCount, "Initial trials count is ZERO").to.be.greaterThan(0);
-                        if (testData.prevTrialsCount > 0 && testData.prevTrialsCount > testData.trialsCount) {
-                            testData.decreasedAtLeastOnce = true;
+                testData.tests.filter(t => t.target == "Text").forEach(test => {
+                    if (botReply.text.match(test.regex)) {
+                        if (test.value.startsWith("$")) {
+                            test.value = testData.vars[test.value]
                         }
-                        testData.prevTrialsCount = testData.trialsCount;
-                    }
-                    else {
-                        if (this.checkIfConversationEnded(testData)) {
-                            testData.testEnded = true;
-                            expect(testData.decreasedAtLeastOnce, "Trials count didn't decrease").to.be.true;
+                        if (test.save) {
+                            testData.vars[test.save] = test.value
                         }
-                        expect(botReply.text, "The bot replied with empty text").to.not.be.empty;
+
+                        switch (test.type) {
+                            case TestType.Equals:
+                                expect(botReply.text, test.error).to.equal(test.value)
+                                break;
+                            case TestType.GreaterThan:
+                                expect(botReply.text, test.error).to.be.gt(test.value)
+                                break;
+                            case TestType.LowerThen:
+                                expect(botReply.text, test.error).to.be.lt(test.value)
+                                break;
+                            case TestType.Match:
+                                throw test.error
+                                break;
+                            default:
+                                throw "unknown test type " + test.type;
+                        }
                     }
-                }
+                });
             }
+
+
+            //TODO - support dynamic card tests with json path
             if (botReply.hasOwnProperty("attachments")) {
-                try {
-                    this.assertThatCardsFieldsAreNotEmpty(botReply.attachments);
-                    if (testData.testEnded) {
-                        expect(botReply.attachments[0].content.body.length, "Final trials count is ZERO").to.be.greaterThan(0);
+                botReply.attachments.forEach(a => expect(a, "empty attachment").to.not.be.empty)
+                botReply.attachments.forEach(attachment => {
+                    let body = attachment.content.body;
+                    if (attachment.content.body) {
+                        attachment.content.body.forEach(body => {
+                            expect(body.items.length, "empty body").to.be.gt(0)
+                            body.items.forEach(item => {
+                                if (item.type == "TextBlock") {
+                                    expect(item.text, "null TextBlock").to.not.be.null
+                                    expect(item.text, "undefined TextBlock").to.not.be.undefined
+                                    expect(item.text, "empty TextBlock").to.not.be.empty
+                                }
+                            })
+                        });
+
+                    } else if (attachment.content.buttons) {
+                        expect(attachment.content.buttons.length, "empty buttons").to.be.gt(0)
+                        attachment.content.buttons.forEach(btn => {
+                            expect(btn.title, "null title").to.not.be.null
+                            expect(btn.title, "undefined title").to.not.be.undefined
+                            expect(btn.title, "empty title").to.not.be.empty
+
+                            expect(btn.value, "null value").to.not.be.null
+                            expect(btn.value, "undefined value").to.not.be.undefined
+                            expect(btn.value, "empty value").to.not.be.empty
+                        })
+
+
+                    } else {
+                        throw "Empty attachment"
                     }
-                }
-                catch (err) {
-                    var exception = new Error(err.message);
-                    exception.details = { message: err.message, expected: err.expected, actual: err.actual, diff: diff(err.expected, err.actual) };
-                    throw exception;
-                }
+                })
             }
+
         }
+
         return true;
     }
 }

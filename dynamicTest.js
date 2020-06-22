@@ -146,7 +146,7 @@ class DynamicTest extends Test {
                     //do nothing
                 } else {
                     context.log("error - unrecognized message: " + testData.lastMessageFromBot);
-                    throw "error - unrecognized message: " + testData.lastMessageFromBot;
+                    throw "error - unrecognized message: " + testData.lastMessageFromBot.text;
 
                 }
             }
@@ -212,11 +212,18 @@ class DynamicTest extends Test {
             var botReply = botReplies[i];
 
             if (botReply.hasOwnProperty("text")) {
-                testData.tests.filter(t => t.target == "Text").forEach(test => {
-                    if (botReply.text.match(test.regex)) {
-                        if (test.value.startsWith("$")) {
-                            test.value = testData.vars[test.value]
+                testData.tests.filter(t => t.test.target == "Text").forEach(t => {
+                    let match = botReply.text.match(t.regex)
+                    if (match) {
+                        let test = t.test;
+                        if (test.value && test.value.startsWith("$")) {
+                            if(testData.vars[test.value]){
+                                test.value = testData.vars[test.value]
+                            }else{
+                                test.value = test.default
+                            }
                         }
+
                         if (test.save) {
                             testData.vars[test.save] = test.value
                         }
@@ -226,10 +233,10 @@ class DynamicTest extends Test {
                                 expect(botReply.text, test.error).to.equal(test.value)
                                 break;
                             case TestType.GreaterThan:
-                                expect(botReply.text, test.error).to.be.gt(test.value)
+                                expect(Number.parseFloat(match[1]), test.error).to.be.gt(Number.parseFloat(test.value))
                                 break;
                             case TestType.LowerThen:
-                                expect(botReply.text, test.error).to.be.lt(test.value)
+                                expect(Number.parseFloat(match[1]), test.error).to.be.lt(Number.parseFloat(test.value))
                                 break;
                             case TestType.Match:
                                 throw test.error

@@ -24,7 +24,8 @@ class DynamicTestData {
         this.trialsCount = -1;
         this.prevTrialsCount = -1;
         this.testEnded = false;
-
+        this.vars = {}
+        
         if (!this.bot) {
             throw new Error("Configuration error: No bot name was given as a query parameter nor as a test property and no DefaultBot in application settings.");
         }
